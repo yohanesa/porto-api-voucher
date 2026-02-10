@@ -1,0 +1,10 @@
+Django>=4.2
+django-ninja>=1.0
+psycopg[binary]
+gunicorn
+uvicorn[standard]
+whitenoise
+python-dotenv
+pytest>=7.0
+pytest-django>=4.5
+factory-boy>=3.2
