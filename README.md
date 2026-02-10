@@ -351,7 +351,10 @@ django_app container ready for deployment
 
 ## 📄 License
 
-MIT
+This project is licensed under CC BY-NC 4.0.
+
+Non-commercial use (including learning and hiring evaluation) is allowed.
+Commercial use requires a separate license. Please contact the author.
 
 ---
 
