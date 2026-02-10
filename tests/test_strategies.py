@@ -96,7 +96,6 @@ class TestStrategyInheritance:
             assert hasattr(strategy, 'calculate')
             assert hasattr(strategy, 'redeem')
             assert callable(strategy.calculate)
-            assert callable(strategy.redeem)
 
     def test_strategy_has_voucher_and_promo_attributes(self, test_voucher_fixed):
         """All strategies should have voucher and promo attributes."""

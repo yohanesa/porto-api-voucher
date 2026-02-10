@@ -30,3 +30,14 @@ class BaseStrategy(ABC):
         value (may be Decimal("0.00")).
         """
         raise NotImplementedError()
+
+    def redeem(self, *args, **kwargs):
+        """Optional redeem hook.
+
+        Concrete strategies may override this to perform any strategy-specific
+        actions during redemption. The default implementation intentionally
+        raises NotImplementedError to signal that there is no default
+        persistence behaviour at the strategy level (the service layer
+        handles DB updates).
+        """
+        raise NotImplementedError()
