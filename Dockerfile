@@ -30,6 +30,7 @@ COPY . .
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
+# Do not collect static files at build time; entrypoint will run collectstatic
 RUN chown -R appuser:appuser /app
 USER appuser
 

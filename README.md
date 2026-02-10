@@ -1,5 +1,9 @@
 # Promo Code Management API
 
+> **Portfolio Project** — A small Python/Django version of a real voucher system originally built in PHP/Laravel. The project focuses on clean structure, clear business logic, and Docker-based deployment. Core voucher features are implemented, while more complex cases are intentionally left out to keep the project simple and easy to understand.
+
+Note: AI tools (GitHub Copilot and ChatGPT) were used to assist development. The final design and implementation decisions are my own.
+
 A Django-Ninja REST API for managing promotional vouchers and discount codes with atomic redemption, strategy-based calculation, and production-ready Docker setup.
 
 ## 🎯 What It Does
@@ -41,7 +45,50 @@ with transaction.atomic():
     # Safe to mark as redeemed
 ```
 
-### 3. **Signal-Based Voucher Generation**
+### 3. **Three-Phase Payment-Dependent Redemption** ⭐
+For payment-dependent workflows with **user-based authorization**: reserve during checkout, confirm after payment:
+
+```python
+from django.contrib.auth.models import User
+from apps.promoout.services.promo_service import PromoService
+
+user = User.objects.get(pk=1)  # Current logged-in user
+
+# Phase 1: Reserve voucher during checkout (before payment)
+# Only this user can later confirm or rollback
+reserve_result = PromoService.reserve_voucher(
+    voucher_code="PROMO123",
+    transaction_pk=42,
+    transaction_amount=Decimal("100.00"),
+    user=user  # <- Locks to this user
+)
+# → status='reserved', reserved_by_user=user, prevents other users from interfering
+
+# Phase 2a: Confirm after payment succeeds
+# Only the same user who reserved can confirm
+PromoService.confirm_redemption(
+    voucher_code="PROMO123",
+    transaction_pk=42,
+    user=user  # <- Must match the reserving user
+)
+# → status='activated', sets final reference
+
+# Phase 2b: Or rollback if payment fails/canceled
+# Only the same user who reserved can rollback
+PromoService.rollback_reservation(
+    voucher_code="PROMO123",
+    transaction_pk=42,
+    user=user  # <- Must match the reserving user
+)
+# → status='available' again, available for other users
+```
+
+**Security:** Voucher is locked to the user who reserved it. Confirm/rollback require:
+- ✅ Valid authentication
+- ✅ Matching transaction ID
+- ✅ Same user who made the reservation
+
+### 4. **Signal-Based Voucher Generation**
 ```python
 # Vouchers created automatically when Promo is saved
 @receiver(post_save, sender=Promo)
@@ -50,15 +97,16 @@ def create_vouchers_on_promo_created(sender, instance, created, **kwargs):
 ```
 No circular imports, clean separation of concerns.
 
-### 4. **Comprehensive Test Suite**
+### 5. **Comprehensive Test Suite**
 ```
-26 tests passing ✅
-- Strategy unit tests
-- Registry validation
-- Redemption flow integration tests
+38 tests passing ✅
+- Strategy unit tests (14 tests)
+- Registry validation (6 tests)
+- Direct redemption flow (10 tests)
+- Three-phase payment-dependent flow with user authorization (8 tests)
 ```
 
-### 5. **Production-Ready Docker**
+### 6. **Production-Ready Docker**
 Multi-stage build: tests run first, production stage only builds if all tests pass.
 
 ## 📊 Database Schema
@@ -77,8 +125,11 @@ VoucherCode
 ├── id (PK)
 ├── promo_id (FK)
 ├── code (unique)
-├── activated (boolean)
-├── reference (nullable, transaction_pk)
+├── status (available|reserved|activated)
+├── activated (boolean, backward compat)
+├── pending_transaction_pk (nullable, temp hold during payment)
+├── reserved_by_user_id (FK, non-null when reserved; authorization)
+├── reference (nullable, final transaction_pk after activation)
 └── timestamps
 ```
 
@@ -140,7 +191,7 @@ GET    /api/promo/              List all promos
 POST   /api/promo/{id}/vouchers Generate vouchers for a promo
 ```
 
-### Voucher Redemption
+### Voucher Redemption (Direct)
 ```
 POST   /api/promoout/redeem
 Request:
@@ -155,7 +206,7 @@ Response:
   "voucher": {
     "id": 1,
     "code": "PROMO123",
-    "activated": true,
+    "status": "activated",
     "reference": 42
   },
   "calculation": {
@@ -164,6 +215,28 @@ Response:
   }
 }
 ```
+
+### Voucher Redemption (Three-Phase for Payment-Dependent Flows)
+```
+# Phase 1: Reserve during checkout (before payment)
+POST   /api/promoout/reserve
+Request:
+{
+  "code": "PROMO123",
+  "transaction_pk": 42,
+  "transaction_amount": "99.99"
+}
+Response: { "voucher": {..., "status": "reserved"}, "calculation": {...} }
+
+# Phase 2a: Confirm after payment succeeds
+POST   /api/promoout/confirm/{code}/{transaction_pk}
+Response: { "voucher": {..., "status": "activated", "reference": 42} }
+
+# Phase 2b: Rollback if payment fails
+POST   /api/promoout/rollback/{code}/{transaction_pk}
+Response: { "voucher": {..., "status": "available"} }
+```
+*Note: These endpoints are not yet exposed in the API. See `PromoService` methods for usage.*
 
 ## 🧪 Testing
 
